@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SGC Session Documentation Portal</title>
+<meta name="description" content="Generate professional executive session summary documents in real time." />
+
+<!-- Google Fonts: Source Serif 4 for the document, Inter for UI, IBM Plex Mono for meta/data -->
+<link rel="stylesheet" href="style.css" />
+          </div>
+</head>
+<body data-theme="light">
+
+<!-- ============================= TOP BAR ============================= -->
+<header class="topbar">
+  <div class="topbar__brand topbar__brand--corner">
+    <div class="topbar__titles">
+      <h1 class="topbar__title">Session Documentation Portal</h1>
+      <p class="topbar__subtitle"> &middot; Student Guidance Cell</p>
+    </div>
+  </div>
+  <div class="topbar__status" id="statusIndicator" aria-live="polite">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">Draft in progress</span>
+  </div>
+</header>
+
+<!-- ============================= APP SHELL ============================= -->
+<div class="app-shell">
+
+  <!-- ======================= LEFT PANEL: FORM ======================= -->
+  <aside class="panel panel--form" aria-label="Session input form">
+    <div class="panel__scroll">
+      <form id="sessionForm" novalidate>
+
+        <!-- SECTION: Session Information -->
+        <section class="form-section" aria-labelledby="sec-info">
+          <h2 class="form-section__title" id="sec-info">
+            <span class="form-section__index">01</span> Session Information
+          </h2>
+
+          <div class="field">
+            <label for="topic">Session Topic <span class="req">*</span></label>
+            <input type="text" id="topic" name="topic" maxlength="120" placeholder="e.g. Introduction to Version Control with Git" required />
+            <p class="field__error" id="err-topic" role="alert"></p>
+          </div>
+
+          <div class="field">
+            <label for="handler">Session Handler <span class="req">*</span></label>
+            <input type="text" id="handler" name="handler" maxlength="80" placeholder="e.g. Ayaz Ahamed, President - SGC" required />
+            <p class="field__error" id="err-handler" role="alert"></p>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="date">Date <span class="req">*</span></label>
+              <input type="date" id="date" name="date" required />
+              <p class="field__error" id="err-date" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="day">Day</label>
+              <input type="text" id="day" name="day" readonly placeholder="Auto-calculated" tabindex="-1" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="time">Time <span class="req">*</span></label>
+              <input type="time" id="time" name="time" required />
+              <p class="field__error" id="err-time" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="duration">Duration</label>
+              <input type="text" id="duration" name="duration" maxlength="30" placeholder="e.g. 1 hr 30 min" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="venue">Venue <span class="req">*</span></label>
+              <select id="venue" name="venue" required>
+                <option value="">Select venue</option>
+                <option value="SGC ROOM">SGC ROOM</option>
+                <option value="Online session">Online session</option>
+              </select>
+            <p class="field__error" id="err-venue" role="alert"></p>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="attendees">Number of Attendees <span class="req">*</span></label>
+              <input type="number" id="attendees" name="attendees" min="0" max="9999" placeholder="e.g. 64" required />
+              <p class="field__error" id="err-attendees" role="alert"></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: Learning Objectives -->
+        <section class="form-section" aria-labelledby="sec-obj">
+          <h2 class="form-section__title" id="sec-obj">
+            <span class="form-section__index">02</span> Learning Objectives
+            <span class="form-section__hint">max 5</span>
+          </h2>
+          <div class="dynamic-list" id="objectivesList"></div>
+          <button type="button" class="btn btn--add" id="addObjective">+ Add Objective</button>
+        </section>
+
+        <!-- SECTION: Executive Summary -->
+        <section class="form-section" aria-labelledby="sec-summary">
+          <h2 class="form-section__title" id="sec-summary">
+            <span class="form-section__index">03</span> Executive Summary
+          </h2>
+          <div class="field">
+            <label for="summary" class="sr-only">Executive Summary</label>
+            <textarea id="summary" name="summary" rows="4" maxlength="900" placeholder="Summarize the purpose, delivery, and impact of this session in a few crisp sentences..."></textarea>
+            <p class="char-counter"><span id="summaryCount">0</span> / 900 characters</p>
+          </div>
+        </section>
+
+        <!-- SECTION: Key Concepts -->
+        <section class="form-section" aria-labelledby="sec-concepts">
+          <h2 class="form-section__title" id="sec-concepts">
+            <span class="form-section__index">04</span> Key Concepts
+          </h2>
+          <div class="dynamic-table" id="conceptsTable"></div>
+          <button type="button" class="btn btn--add" id="addConcept">+ Add Concept</button>
+        </section>
+
+        <!-- SECTION: Session Outcome -->
+        <section class="form-section" aria-labelledby="sec-outcomes">
+          <h2 class="form-section__title" id="sec-outcomes">
+            <span class="form-section__index">05</span> Session Outcome
+          </h2>
+          <div class="dynamic-list" id="outcomesList"></div>
+          <button type="button" class="btn btn--add" id="addOutcome">+ Add Outcome</button>
+        </section>
+
+        <!-- SECTION: Reference Links -->
+        <section class="form-section" aria-labelledby="sec-links">
+          <h2 class="form-section__title" id="sec-links">
+            <span class="form-section__index">06</span> Reference Links
+            <span class="form-section__hint">QR auto-generated</span>
+          </h2>
+          <div class="dynamic-list dynamic-list--links" id="linksList"></div>
+          <button type="button" class="btn btn--add" id="addLink">+ Add Reference</button>
+        </section>
+
+      </form>
+    </div>
+  </aside>
+
+  <!-- ======================= CENTER PANEL: PREVIEW ======================= -->
+  <main class="panel panel--preview" aria-label="Live document preview">
+    <div class="panel__scroll panel__scroll--center">
+      <div class="a4-stage">
+        <div class="a4-page" id="a4Page">
+          <!-- Document content is rendered here by app.js -->
+          <div id="docContent"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ======================= RIGHT PANEL: ACTIONS ======================= -->
+  <aside class="panel panel--actions" aria-label="Quick actions">
+    <div class="panel__scroll">
+      <h2 class="actions__title">Quick Actions</h2>
+
+      <button type="button" class="action-btn action-btn--primary" id="btnPreview">
+        <svg viewBox="0 0 24 24" class="icon"><path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7Zm0 11.5A4.5 4.5 0 1 1 16.5 12 4.5 4.5 0 0 1 12 16.5Z"/><circle cx="12" cy="12" r="2.2"/></svg>
+        Full Preview
+      </button>
+
+      <button type="button" class="action-btn" id="btnPdf">
+        <svg viewBox="0 0 24 24" class="icon"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm8 1.5V8h4.5L14 3.5ZM8 13h2.2a1.9 1.9 0 0 1 0 3.8H8.9V19H8Zm.9 1v.8h1.1a.9.9 0 0 0 0-.8Zm4.4-1h1.9c1.3 0 2.1 1 2.1 3s-.8 3-2.1 3h-1.9Zm.9 1v4h.9c.7 0 1.2-.6 1.2-2s-.5-2-1.2-2Zm5-1H21v1h-1.8v1.1H21v1h-1.8V19h-.9Z"/></svg>
+        Download PDF
+      </button>
+
+      <button type="button" class="action-btn" id="btnPng">
+        <svg viewBox="0 0 24 24" class="icon"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm1 2v10.2L9.5 12l2.6 3 3.4-4.6L18 15V6H6Zm2.5 2.5A1.5 1.5 0 1 1 7 10a1.5 1.5 0 0 1 1.5-1.5Z"/></svg>
+        Download PNG
+      </button>
+
+      <button type="button" class="action-btn" id="btnPrint">
+        <svg viewBox="0 0 24 24" class="icon"><path d="M6 2h12v6H6Zm-2 8h16a2 2 0 0 1 2 2v5h-4v3H6v-3H2v-5a2 2 0 0 1 2-2Zm3 8h10v-4H7Zm10.5-6a1 1 0 1 0 1 1 1 1 0 0 0-1-1Z"/></svg>
+        Print Document
+      </button>
+
+      <div class="actions__divider"></div>
+
+      <button type="button" class="action-btn action-btn--ghost" id="btnSample">
+        <svg viewBox="0 0 24 24" class="icon"><path d="M12 2 14.5 8.5 21 9l-5 4.4L17.5 20 12 16.3 6.5 20 8 13.4 3 9l6.5-.5Z"/></svg>
+        Load Sample Data
+      </button>
+
+      <button type="button" class="action-btn action-btn--ghost" id="btnReset">
+        <svg viewBox="0 0 24 24" class="icon"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/></svg>
+        Reset Form
+      </button>
+
+      <button type="button" class="action-btn action-btn--ghost" id="btnTheme">
+        <svg viewBox="0 0 24 24" class="icon" id="themeIcon"><path d="M12 3a9 9 0 1 0 9 9c0-.3 0-.6-.05-.9A6.5 6.5 0 0 1 12 3Z"/></svg>
+        <span id="themeLabel">Dark Mode</span>
+      </button>
+
+      <div class="actions__divider"></div>
+
+      <div class="fit-indicator" id="fitIndicator">
+        <span class="fit-indicator__label">Page fit</span>
+        <span class="fit-indicator__value" id="fitValue">100%</span>
+      </div>
+
+      <p class="actions__note">This tool runs entirely in your browser. Nothing you type is uploaded anywhere.</p>
+    </div>
+  </aside>
+</div>
+
+<!-- ============================= FULLSCREEN PREVIEW MODAL ============================= -->
+<div class="modal" id="previewModal" aria-hidden="true">
+  <div class="modal__backdrop" id="modalBackdrop"></div>
+  <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Full document preview">
+    <button type="button" class="modal__close" id="modalClose" aria-label="Close preview">&times;</button>
+    <div class="modal__scroll">
+      <div class="a4-page a4-page--modal" id="a4PageModal"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden export clone target (kept off-screen, always at 100% scale for crisp exports) -->
+<div id="exportRoot" aria-hidden="true"></div>
+
+<!-- ============================= THIRD-PARTY LIBRARIES (CDN) ============================= -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script src="script.js"></script>
+</body>
+</html>
