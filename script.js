@@ -431,7 +431,7 @@
           
           <div class="doc-footer__brand">
             <strong>SGC Documentation Team</strong>
-            <p>Student Guidance Cell &middot; CAHCET, Ambur</p>
+            <p>Student Guidance Cell &middot; CAHCET</p>
           </div>
         </footer>
       </div>`;
@@ -616,33 +616,33 @@
 
   function loadSampleData() {
     state = {
-      topic: "Introduction to Version Control with Git",
-      handler: "Ayaz Ahamed, President - SGC",
+      topic: "Lorem Ipsum Dolor Sit Amet",
+      handler: "XXXXX",
       date: new Date().toISOString().slice(0, 10),
       time: "10:30",
       duration: "1 hr 30 min",
       venue: "Seminar Hall, Block B",
       attendees: "64",
       objectives: [
-        "Explain the purpose of version control in collaborative software projects",
-        "Demonstrate core Git commands: clone, commit, push, and pull",
-        "Practice resolving a merge conflict in a shared repository"
+        "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor",
+        "Incididunt ut labore et dolore magna aliqua ut enim ad minim veniam",
+        "Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo"
       ],
-      summary: "This session introduced final-year students to Git and GitHub as the standard toolchain for collaborative development. Attendees moved from local repository basics to a live, hands-on branching and merge-conflict exercise modelled on real team workflows, closing with a Q&A on best practices for commit hygiene and code review.",
+      summary: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
       concepts: [
-        { concept: "Repository", description: "A tracked project folder containing the full history of changes." },
-        { concept: "Commit", description: "A saved snapshot of changes with a descriptive message." },
-        { concept: "Branching", description: "Working on features in isolation before merging into the main line." },
-        { concept: "Merge Conflict", description: "When overlapping changes require manual reconciliation." }
+        { concept: "Lorem Ipsum", description: "Dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore." },
+        { concept: "Consectetur", description: "Adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." },
+        { concept: "Incididunt", description: "Ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation." },
+        { concept: "Ullamco", description: "Laboris nisi ut aliquip ex ea commodo consequat duis aute irure dolor in reprehenderit." }
       ],
       outcomes: [
-        "92% of attendees successfully pushed their first commit during the session",
-        "Live poll showed a 4.6/5 average confidence rating in using Git independently",
-        "Follow-up practice repository shared for continued self-paced learning"
+        "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor",
+        "Incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud",
+        "Exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat duis aute irure"
       ],
       links: [
-        { title: "Pro Git Book (free online)", url: "https://git-scm.com/book/en/v2" },
-        { title: "GitHub Learning Lab", url: "https://skills.github.com/" }
+        { title: "Lorem Ipsum Reference", url: "https://www.lipsum.com/" },
+        { title: "Dolor Sit Amet Guide", url: "https://www.example.com/" }
       ]
     };
     hydrateFormFromState();
