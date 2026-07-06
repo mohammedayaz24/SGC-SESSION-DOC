@@ -313,7 +313,7 @@
     const dateLong = formatDateLong(s.date);
     const dayName = dayFromDate(s.date);
     const timeText = formatTime12h(s.time);
-    const generatedDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
+    const generatedDate = dateLong;
 
     const objectives = s.objectives.filter((o) => o.trim().length > 0);
     const outcomes = s.outcomes.filter((o) => o.trim().length > 0);
@@ -713,6 +713,21 @@
       el(id).addEventListener("blur", () => {
         if (REQUIRED_FIELDS.includes(id)) validateField(id);
       });
+    });
+
+    // Venue-specific logic: update duration placeholder and time field based on venue
+    el("venue").addEventListener("input", () => {
+      const durEl = el("duration");
+      const timeEl = el("time");
+      const venue = el("venue").value;
+      
+      if (venue === "SGC ROOM") {
+        durEl.placeholder = "e.g. 2 PM - 3:30 PM";
+        timeEl.disabled = false;
+      } else if (venue === "KT SESSION") {
+        durEl.placeholder = "e.g. 1 hr 30 min";
+        timeEl.disabled = false;
+      }
     });
 
     el("date").addEventListener("input", () => {
