@@ -369,7 +369,6 @@
         <div class="doc-body">
           <p class="doc-topic-line">
             ${orPlaceholder(s.topic, "Untitled Session Topic")}
-            <span>Prepared for institutional record</span>
           </p>
 
           <section class="doc-section">
