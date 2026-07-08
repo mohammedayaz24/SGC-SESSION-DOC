@@ -7,8 +7,11 @@
 <meta name="description" content="Generate professional executive session summary documents in real time." />
 
 <!-- Google Fonts: Source Serif 4 for the document, Inter for UI, IBM Plex Mono for meta/data -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="style.css" />
-          </div>
 </head>
 <body data-theme="light">
 
@@ -17,7 +20,7 @@
   <div class="topbar__brand topbar__brand--corner">
     <div class="topbar__titles">
       <h1 class="topbar__title">Session Documentation Portal</h1>
-      <p class="topbar__subtitle"> &middot; Student Guidance Cell</p>
+      <p class="topbar__subtitle">Student Guidance Cell</p>
     </div>
   </div>
   <div class="topbar__status" id="statusIndicator" aria-live="polite">
@@ -48,7 +51,7 @@
 
           <div class="field">
             <label for="handler">Session Handler <span class="req">*</span></label>
-            <input type="text" id="handler" name="handler" maxlength="80" placeholder="e.g. Ayaz Ahamed, President - SGC" required />
+            <input type="text" id="handler" name="handler" maxlength="80" placeholder="XXXXXXXXXXXXXXX" required />
             <p class="field__error" id="err-handler" role="alert"></p>
           </div>
 
@@ -78,11 +81,11 @@
 
           <div class="field">
             <label for="venue">Venue <span class="req">*</span></label>
-              <select id="venue" name="venue" required>
-                <option value="">Select venue</option>
-                <option value="SGC ROOM">SGC ROOM</option>
-                <option value="Online session">KT SESSION</option>
-              </select>
+            <select id="venue" name="venue" required>
+              <option value="">Select venue</option>
+              <option value="SGC ROOM">SGC ROOM</option>
+              <option value="Online session">KT SESSION</option>
+            </select>
             <p class="field__error" id="err-venue" role="alert"></p>
           </div>
 
@@ -153,10 +156,9 @@
   <main class="panel panel--preview" aria-label="Live document preview">
     <div class="panel__scroll panel__scroll--center">
       <div class="a4-stage">
-        <div class="a4-page" id="a4Page">
-          <!-- Document content is rendered here by app.js -->
-          <div id="docContent"></div>
-        </div>
+        <!-- docContent now holds one or more full-size .a4-page elements, stacked.
+             It is never resized/reflowed internally — only visually zoomed via JS. -->
+        <div class="a4-page-list" id="docContent"></div>
       </div>
     </div>
   </main>
@@ -210,7 +212,7 @@
         <span class="fit-indicator__value" id="fitValue">100%</span>
       </div>
 
-      <p class="actions__note">This tool runs entirely in your browser. Nothing you type is uploaded anywhere.</p>
+      <p class="actions__note">This tool runs entirely in your browser. Nothing you type is uploaded anywhere. Everything is kept to a single A4 page — if content grows, the whole layout scales down proportionally (never just the font), so nothing looks cramped or cut off.</p>
     </div>
   </aside>
 </div>
@@ -221,12 +223,12 @@
   <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Full document preview">
     <button type="button" class="modal__close" id="modalClose" aria-label="Close preview">&times;</button>
     <div class="modal__scroll">
-      <div class="a4-page a4-page--modal" id="a4PageModal"></div>
+      <div class="a4-page-list a4-page-list--modal" id="a4PageModal"></div>
     </div>
   </div>
 </div>
 
-<!-- Hidden export clone target (kept off-screen, always at 100% scale for crisp exports) -->
+<!-- Hidden export clone target (kept off-screen, always true A4 size for crisp exports) -->
 <div id="exportRoot" aria-hidden="true"></div>
 
 <!-- ============================= THIRD-PARTY LIBRARIES (CDN) ============================= -->

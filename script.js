@@ -8,18 +8,25 @@
  *   3. UTILITIES
  *   4. VALIDATION
  *   5. DYNAMIC LIST RENDERING (form side)
- *   6. DOCUMENT RENDERING (preview / export side)
- *   7. QR CODE GENERATION
- *   8. AUTO PAGE FIT
- *   9. EXPORT: PDF / PNG / PRINT
- *  10. THEME
- *  11. SAMPLE DATA / RESET
- *  12. EVENT WIRING / INIT
+ *   6. DOCUMENT CONTENT (single, always-one-page HTML)
+ *   7. ONE-PAGE FIT ENGINE (uniform shrink, never just font-size)
+ *   8. DOCUMENT RENDERING (mount into any container)
+ *   9. QR CODE GENERATION
+ *  10. RESPONSIVE ZOOM (visual-only, fits the dashboard, unrelated to fit engine)
+ *  11. EXPORT: PDF / PNG / PRINT
+ *  12. THEME
+ *  13. SAMPLE DATA / RESET / MODAL
+ *  14. EVENT WIRING / INIT
  *
- * This module is intentionally framework-free but keeps a single source of
- * truth (the `state` object) and pure render functions, so it can be ported
- * to a MERN stack later by swapping `state` for props/redux and
- * `buildDocumentHTML` for a React component with minimal logic changes.
+ * ARCHITECTURE NOTE: this document is ALWAYS exactly one A4 page. Rather
+ * than paginating, or shrinking only the font (which leaves padding/margins
+ * full-size and makes content look cramped), the entire content block is
+ * uniformly scaled down — via a JS-computed `zoom` plus a compensating
+ * `width` on `.doc-body__scale` — only as much as needed to fit. Text,
+ * spacing, table padding, and QR cards all shrink together, so a reduced
+ * page still reads as a clean, proportional "zoomed out" version of the
+ * full design. The exact same function drives the live preview, the modal,
+ * PDF export, and PNG export, so all four are always pixel-consistent.
  */
 (function () {
   "use strict";
@@ -48,8 +55,7 @@
   const el = (id) => document.getElementById(id);
 
   const form = el("sessionForm");
-  const docContent = el("docContent");
-  const a4Page = el("a4Page");
+  const docContent = el("docContent"); // .a4-page-list wrapper for the live preview
   const exportRoot = el("exportRoot");
   const statusDot = el("statusDot");
   const statusText = el("statusText");
@@ -57,20 +63,17 @@
 
   /* ============================== 3. UTILITIES ============================ */
 
-  /** Escape a string for safe HTML interpolation. */
   function esc(str) {
     return String(str == null ? "" : str).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     }[c]));
   }
 
-  /** Return a fallback placeholder span when a value is empty (used only in preview). */
   function orPlaceholder(value, placeholder) {
     const v = String(value == null ? "" : value).trim();
     return v ? esc(v) : `<span class="doc-empty">${esc(placeholder)}</span>`;
   }
 
-  /** Basic client-side URL validity check (http/https only). */
   function isValidUrl(str) {
     if (!str) return false;
     try {
@@ -81,7 +84,6 @@
     }
   }
 
-  /** Format a YYYY-MM-DD date string into "06 July 2026". */
   function formatDateLong(dateStr) {
     if (!dateStr) return "";
     const d = new Date(dateStr + "T00:00:00");
@@ -89,7 +91,6 @@
     return d.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
   }
 
-  /** Format a HH:MM time string into "10:30 AM". */
   function formatTime12h(timeStr) {
     if (!timeStr) return "";
     const [h, m] = timeStr.split(":").map(Number);
@@ -99,7 +100,6 @@
     return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
   }
 
-  /** Auto-calculate the weekday name from a date string. */
   function dayFromDate(dateStr) {
     if (!dateStr) return "";
     const d = new Date(dateStr + "T00:00:00");
@@ -107,13 +107,11 @@
     return d.toLocaleDateString("en-US", { weekday: "long" });
   }
 
-  /** Auto-grow a textarea to fit its content. */
   function autosize(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + "px";
   }
 
-  /** Debounce document re-render to the next animation frame (batches rapid keystrokes). */
   let renderQueued = false;
   function scheduleRender() {
     if (renderQueued) return;
@@ -161,7 +159,6 @@
 
   /* ==================== 5. DYNAMIC LIST RENDERING (form) ==================== */
 
-  /* ---- Learning Objectives (simple string list, max 5) ---- */
   function renderObjectivesForm() {
     const container = el("objectivesList");
     container.innerHTML = state.objectives.map((val, i) => `
@@ -177,7 +174,6 @@
     el("addObjective").disabled = state.objectives.length >= MAX_OBJECTIVES;
   }
 
-  /* ---- Session Outcome (simple string list, unlimited) ---- */
   function renderOutcomesForm() {
     const container = el("outcomesList");
     container.innerHTML = state.outcomes.map((val, i) => `
@@ -192,7 +188,6 @@
       </div>`).join("");
   }
 
-  /* ---- Key Concepts (concept + description table) ---- */
   function renderConceptsForm() {
     const container = el("conceptsTable");
     container.innerHTML = state.concepts.map((row, i) => `
@@ -219,7 +214,6 @@
     el("addConcept").disabled = false;
   }
 
-  /* ---- Reference Links (title + url + QR validity hint) ---- */
   function renderLinksForm() {
     const container = el("linksList");
     container.innerHTML = state.links.map((row, i) => {
@@ -255,7 +249,6 @@
     renderLinksForm();
   }
 
-  /* ---- Delegated input handling for all dynamic lists ---- */
   function handleDynamicInput(e) {
     const t = e.target;
     const listName = t.getAttribute("data-list");
@@ -274,7 +267,6 @@
     scheduleRender();
   }
 
-  /** Lightweight refresh of just the QR validity hint text without re-rendering whole row (keeps focus). */
   function renderLinksHintOnly(index) {
     const row = document.querySelector(`.list-row--link[data-index="${index}"]`);
     if (!row) return;
@@ -306,14 +298,49 @@
     if (listName === "links") renderLinksForm();
   }
 
-  /* ===================== 6. DOCUMENT RENDERING (preview) ===================== */
+  /* ===================== 6. DOCUMENT CONTENT (single page) ===================== */
 
-  /** Build the full HTML markup for the executive session summary document. */
-  function buildDocumentHTML(s) {
+  /** Static header markup. */
+  function renderHeaderHTML() {
+    return `<header class="doc-header">
+      <div class="doc-header__logos doc-header__logos--left">
+        <img class="doc-header__logo" src="officiallogo.png" alt="First logo" />
+      </div>
+      <div class="doc-header__mid">
+        <p class="doc-header__college">Student Guidance Cell</p>
+        <p class="doc-header__dept">C. Abdul Hakeem College of Engineering &amp; Technology</p>
+        <h2 class="doc-header__doctitle">Session Summary Document</h2>
+      </div>
+      <div class="doc-header__logos doc-header__logos--right">
+        <img class="doc-header__logo" src="cahcet%20logo.png" alt="C. Abdul Hakeem College logo" />
+      </div>
+    </header>`;
+  }
+
+  /** Footer markup. */
+  function renderFooterHTML(s) {
+    const generatedDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
+    return `<footer class="doc-footer">
+      <div class="doc-footer__col">
+        <p class="doc-footer__label">Generated</p>
+        <p>${esc(generatedDate)}</p>
+      </div>
+      <div class="doc-footer__col">
+        <p class="doc-footer__label">Prepared By</p>
+        <p>${orPlaceholder(s.handler, "—")}</p>
+      </div>
+      <div class="doc-footer__brand">
+        <strong>SGC Documentation Team</strong>
+        <p>Student Guidance Cell &middot; CAHCET</p>
+      </div>
+    </footer>`;
+  }
+
+  /** Build the full body content (everything between header and footer) as one block. */
+  function buildBodyHTML(s) {
     const dateLong = formatDateLong(s.date);
     const dayName = dayFromDate(s.date);
     const timeText = formatTime12h(s.time);
-    const generatedDate = dateLong;
 
     const objectives = s.objectives.filter((o) => o.trim().length > 0);
     const outcomes = s.outcomes.filter((o) => o.trim().length > 0);
@@ -336,10 +363,10 @@
       : `<p class="doc-empty">No key concepts documented yet.</p>`;
 
     const linksHTML = links.length
-      ? `<div class="ref-list">${links.map((l, i) => {
+      ? `<div class="ref-list">${links.map((l) => {
           const valid = isValidUrl(l.url);
           return `<div class="ref-item">
-            <div class="ref-item__qr" ${valid ? `data-qr-slot="${i}" data-qr-url="${esc(l.url)}"` : ""}>
+            <div class="ref-item__qr" ${valid ? `data-qr-url="${esc(l.url)}"` : ""}>
               ${valid ? "" : `<span style="font-size:8px;color:#aab;text-align:center;">No&nbsp;QR</span>`}
             </div>
             <div class="ref-item__text">
@@ -351,109 +378,147 @@
       : `<p class="doc-empty">No reference links added yet.</p>`;
 
     return `
-      <div class="doc">
-        <header class="doc-header">
-          <div class="doc-header__logos doc-header__logos--left">
-            <img class="doc-header__logo" src="officiallogo.png" alt="First logo" />
-          </div>
-          <div class="doc-header__mid">
-            <p class="doc-header__college">Student Guidance Cell</p>
-            <p class="doc-header__dept">C. Abdul Hakeem College of Engineering &amp; Technology</p>
-            <h2 class="doc-header__doctitle">Session Summary Document</h2>
-          </div>
-          <div class="doc-header__logos doc-header__logos--right">
-            <img class="doc-header__logo" src="cahcet%20logo.png" alt="C. Abdul Hakeem College logo" />
-          </div>
-        </header>
+      <p class="doc-topic-line">
+        ${orPlaceholder(s.topic, "Untitled Session Topic")}
+        <span>Prepared for institutional record</span>
+      </p>
 
-        <div class="doc-body">
-          <p class="doc-topic-line">
-            ${orPlaceholder(s.topic, "Untitled Session Topic")}
-          </p>
+      <section class="doc-section">
+        <h3 class="doc-section__title">Session Information</h3>
+        <table class="info-table">
+          <tr>
+            <td class="k2">Handler</td><td>${orPlaceholder(s.handler, "Not specified")}</td>
+            <td class="k2">Venue</td><td>${orPlaceholder(s.venue, "Not specified")}</td>
+          </tr>
+          <tr>
+            <td class="k2">Date</td><td>${dateLong ? esc(dateLong) : `<span class="doc-empty">Not set</span>`}</td>
+            <td class="k2">Day</td><td>${dayName ? esc(dayName) : `<span class="doc-empty">—</span>`}</td>
+          </tr>
+          <tr>
+            <td class="k2">Time</td><td>${timeText ? esc(timeText) : `<span class="doc-empty">Not set</span>`}</td>
+            <td class="k2">Duration</td><td>${orPlaceholder(s.duration, "Not specified")}</td>
+          </tr>
+          <tr>
+            <td class="k2">Attendees</td><td colspan="3">${String(s.attendees).trim() ? esc(s.attendees) : `<span class="doc-empty">Not specified</span>`}</td>
+          </tr>
+        </table>
+      </section>
 
-          <section class="doc-section">
-            <h3 class="doc-section__title">Session Information</h3>
-            <table class="info-table">
-              <tr>
-                <td class="k2">Handler</td><td>${orPlaceholder(s.handler, "Not specified")}</td>
-                <td class="k2">Venue</td><td>${orPlaceholder(s.venue, "Not specified")}</td>
-              </tr>
-              <tr>
-                <td class="k2">Date</td><td>${dateLong ? esc(dateLong) : `<span class="doc-empty">Not set</span>`}</td>
-                <td class="k2">Day</td><td>${dayName ? esc(dayName) : `<span class="doc-empty">—</span>`}</td>
-              </tr>
-              <tr>
-                <td class="k2">Time</td><td>${timeText ? esc(timeText) : `<span class="doc-empty">Not set</span>`}</td>
-                <td class="k2">Duration</td><td>${orPlaceholder(s.duration, "Not specified")}</td>
-              </tr>
-              <tr>
-                <td class="k2">Attendees</td><td colspan="3">${String(s.attendees).trim() ? esc(s.attendees) : `<span class="doc-empty">Not specified</span>`}</td>
-              </tr>
-            </table>
-          </section>
+      <section class="doc-section">
+        <h3 class="doc-section__title">Learning Objectives</h3>
+        ${objectivesHTML}
+      </section>
 
-          <section class="doc-section">
-            <h3 class="doc-section__title">Learning Objectives</h3>
-            ${objectivesHTML}
-          </section>
+      <section class="doc-section">
+        <h3 class="doc-section__title">Executive Summary</h3>
+        <p class="doc-summary">${orPlaceholder(s.summary, "Executive summary will appear here as it is written.")}</p>
+      </section>
 
-          <section class="doc-section">
-            <h3 class="doc-section__title">Executive Summary</h3>
-            <p class="doc-summary">${orPlaceholder(s.summary, "Executive summary will appear here as it is written.")}</p>
-          </section>
+      <section class="doc-section">
+        <h3 class="doc-section__title">Key Concepts</h3>
+        ${conceptsHTML}
+      </section>
 
-          <section class="doc-section">
-            <h3 class="doc-section__title">Key Concepts</h3>
-            ${conceptsHTML}
-          </section>
+      <section class="doc-section">
+        <h3 class="doc-section__title">Session Outcome</h3>
+        ${outcomesHTML}
+      </section>
 
-          <section class="doc-section">
-            <h3 class="doc-section__title">Session Outcome</h3>
-            ${outcomesHTML}
-          </section>
-
-          <section class="doc-section">
-            <h3 class="doc-section__title">Reference Links</h3>
-            ${linksHTML}
-          </section>
-        </div>
-
-        <footer class="doc-footer">
-          <div class="doc-footer__col">
-            <p class="doc-footer__label">Generated</p>
-            <p>${esc(generatedDate)}</p>
-          </div>
-          <div class="doc-footer__col">
-            <p class="doc-footer__label">Prepared By</p>
-            <p>${orPlaceholder(s.handler, "—")}</p>
-          </div>
-          
-          <div class="doc-footer__brand">
-            <strong>SGC Documentation Team</strong>
-            <p>Student Guidance Cell &middot; CAHCET</p>
-          </div>
-        </footer>
-      </div>`;
+      <section class="doc-section" style="margin-bottom:0;">
+        <h3 class="doc-section__title">Reference Links</h3>
+        ${linksHTML}
+      </section>`;
   }
 
-  /** Mount the document markup into any target container, then generate QR codes inside it. */
+  /* ================ 7. ONE-PAGE FIT ENGINE (uniform shrink, never just font-size) ================ */
+
+  const MIN_SCALE = 0.6; // never shrink content below 60% — beyond this we let it show rather than become unreadable
+
+  /**
+   * Uniformly shrink `.doc-body__scale` inside `pageEl` — via a compensating
+   * `width` plus `zoom` — until it fits within the available body height, or
+   * hits MIN_SCALE. Returns the scale factor actually used (1 = no shrink).
+   *
+   * Why width + zoom together: `zoom` alone shrinks BOTH dimensions of the
+   * element, which would leave a growing blank margin on the right as it
+   * shrinks. Widening the un-zoomed box first (by 1/scale) means that after
+   * zoom scales it back down, it exactly refills the full content width —
+   * so the page always looks fully used, just written smaller.
+   */
+  function applyOnePageFit(pageEl) {
+    const bodyEl = pageEl.querySelector(".doc-body");
+    const scaleEl = pageEl.querySelector(".doc-body__scale");
+    const headerEl = pageEl.querySelector(".doc-header");
+    const footerEl = pageEl.querySelector(".doc-footer");
+    if (!bodyEl || !scaleEl || !headerEl || !footerEl) return 1;
+
+    // Reset to natural size for a clean first measurement.
+    scaleEl.style.zoom = 1;
+    scaleEl.style.width = "auto";
+
+    const pageHeight = pageEl.getBoundingClientRect().height;
+    const headerHeight = headerEl.getBoundingClientRect().height;
+    const footerHeight = footerEl.getBoundingClientRect().height;
+    const bodyStyles = getComputedStyle(bodyEl);
+    const bodyPad = parseFloat(bodyStyles.paddingTop) + parseFloat(bodyStyles.paddingBottom);
+    const available = pageHeight - headerHeight - footerHeight - bodyPad - 4; // small safety buffer
+
+    const naturalWidth = scaleEl.getBoundingClientRect().width;
+    const naturalHeight = scaleEl.scrollHeight;
+
+    if (naturalHeight <= available || naturalWidth <= 0) {
+      return 1; // fits already — leave at natural size, fully readable
+    }
+
+    let scale = Math.max(MIN_SCALE, available / naturalHeight);
+
+    // A couple of correction passes: widening the box to compensate for zoom
+    // can very slightly change wrapping, so re-measure and nudge if needed.
+    for (let i = 0; i < 4; i++) {
+      scaleEl.style.width = (naturalWidth / scale) + "px";
+      scaleEl.style.zoom = scale;
+      const renderedHeight = scaleEl.getBoundingClientRect().height;
+      if (renderedHeight <= available || scale <= MIN_SCALE) break;
+      scale = Math.max(MIN_SCALE, scale * (available / renderedHeight));
+    }
+
+    return scale;
+  }
+
+  /* ================ 8. DOCUMENT RENDERING (mount into any container) ================ */
+
+  /**
+   * Render the single-page document into `container` (an .a4-page-list
+   * element), replacing its current contents. Used identically for the live
+   * preview, the full-screen modal, and the hidden export clone — so all of
+   * them always fit and look the same way.
+   */
   function mountDocument(container, s) {
-    container.innerHTML = buildDocumentHTML(s);
-    generateQRCodes(container, s);
+    container.innerHTML = "";
+    const pageEl = document.createElement("div");
+    pageEl.className = "a4-page";
+    pageEl.innerHTML =
+      renderHeaderHTML() +
+      `<div class="doc-body"><div class="doc-body__scale">${buildBodyHTML(s)}</div></div>` +
+      renderFooterHTML(s);
+    container.appendChild(pageEl);
+    generateQRCodes(pageEl);
+    const scale = applyOnePageFit(pageEl);
+    return scale;
   }
 
-  /** Re-render the live center-panel preview and re-fit it to one page. */
+  /** Re-render the live center-panel preview, update the fit indicator and outer zoom. */
   function renderDocument() {
-    mountDocument(docContent, state);
-    fitPageToOnePage();
+    const scale = mountDocument(docContent, state);
+    fitValue.textContent = Math.round(scale * 100) + "%";
+    updateStageZoom();
   }
 
-  /* ========================== 7. QR CODE GENERATION ========================= */
+  /* ========================== 9. QR CODE GENERATION ========================= */
 
-  /** Populate every `[data-qr-slot]` placeholder in `container` with a generated QR code. */
-  function generateQRCodes(container, s) {
+  function generateQRCodes(container) {
     if (typeof QRCode === "undefined") return; // library not loaded (e.g. offline)
-    const slots = container.querySelectorAll("[data-qr-slot]");
+    const slots = container.querySelectorAll("[data-qr-url]");
     slots.forEach((slot) => {
       const url = slot.getAttribute("data-qr-url");
       if (!url) return;
@@ -473,62 +538,37 @@
     });
   }
 
-  /* ============================ 8. AUTO PAGE FIT ============================= */
+  /* ======================= 10. RESPONSIVE ZOOM (visual only) ======================= */
 
   /**
-   * If the rendered document content is taller than a single A4 page, shrink the
-   * document font-scale in small steps until it fits (min 78%). This keeps the
-   * "one-page executive report" promise regardless of how much content is typed.
+   * Scale the whole page down to fit the available dashboard width using CSS
+   * `zoom` on the OUTER `.a4-page-list` wrapper. This is unrelated to, and
+   * layered on top of, the one-page content fit above: this one just makes
+   * the whole finished page smaller on-screen for narrow viewports, exactly
+   * like zooming out on a PDF viewer. Export and print always operate on
+   * their own full-scale (zoom: 1) clone, so they never inherit this.
    */
-  function fitPageToOnePage() {
-    const pageHeightPx = a4Page.getBoundingClientRect().height || a4Page.offsetHeight;
-    if (!pageHeightPx) return;
-
-    let scale = 1;
-    a4Page.style.setProperty("--doc-font-scale", scale);
-
-    // Measure natural (unclamped) content height at scale 1 first.
-    requestAnimationFrame(() => {
-      const doc = docContent.querySelector(".doc");
-      if (!doc) return;
-      const pageRect = a4Page.getBoundingClientRect();
-      const targetHeight = pageRect.height;
-
-      let guard = 0;
-      function step() {
-        const contentHeight = doc.scrollHeight;
-        if (contentHeight <= targetHeight || scale <= 0.78 || guard > 22) {
-          const pct = Math.round(scale * 100);
-          fitValue.textContent = pct + "%";
-          return;
-        }
-        scale = Math.max(0.78, scale - 0.02);
-        a4Page.style.setProperty("--doc-font-scale", scale);
-        guard++;
-        requestAnimationFrame(step);
-      }
-      step();
-    });
+  function updateStageZoom() {
+    if (!docContent.parentElement) return;
+    docContent.style.zoom = 1;
+    const firstPage = docContent.querySelector(".a4-page");
+    if (!firstPage) return;
+    const naturalWidth = firstPage.getBoundingClientRect().width;
+    const available = docContent.parentElement.clientWidth - 4;
+    const scale = Math.min(1, available / naturalWidth);
+    docContent.style.zoom = scale > 0 ? scale : 1;
   }
 
-  /* ======================= 9. EXPORT: PDF / PNG / PRINT ======================= */
+  /* ======================= 11. EXPORT: PDF / PNG / PRINT ======================= */
 
-  /** Render a fresh, full-scale (un-shrunk) copy of the document into the hidden export root. */
+  /** Build a fresh, full-scale, un-zoomed single-page clone in the hidden export root. */
   function prepareExportClone() {
     exportRoot.innerHTML = "";
-    // Ensure export root forces desktop layout regardless of mobile viewport
-    exportRoot.classList.add("export-root-force-desktop");
-    const page = document.createElement("div");
-    page.className = "a4-page";
-    page.style.setProperty("--doc-font-scale", "1");
-    page.style.boxShadow = "none";
-    // Force A4 sizing for exported clone so media queries based on viewport
-    // don't collapse the layout when running on narrow mobile viewports.
-    page.style.width = "210mm";
-    page.style.maxWidth = "210mm";
-    exportRoot.appendChild(page);
-    mountDocument(page, state);
-    return page;
+    const list = document.createElement("div");
+    list.className = "a4-page-list";
+    exportRoot.appendChild(list);
+    mountDocument(list, state);
+    return list.querySelector(".a4-page");
   }
 
   function fileBaseName() {
@@ -541,13 +581,14 @@
   async function exportToPdf() {
     setBusy("btnPdf", true);
     try {
-      const page = prepareExportClone();
-      // Give QR codes a tick to paint before capture.
-      await new Promise((r) => setTimeout(r, 120));
-      const canvas = await html2canvas(page, { scale: 3, useCORS: true, backgroundColor: "#ffffff" });
+      const pageEl = prepareExportClone();
+      await new Promise((r) => setTimeout(r, 150)); // let QR codes paint
+      const canvas = await html2canvas(pageEl, { scale: 3, useCORS: true, backgroundColor: "#ffffff" });
       const imgData = canvas.toDataURL("image/png");
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      // Captured at true A4 proportions, so this is placed at exactly
+      // 210x297mm with no stretching or squeezing — always a single page.
       pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
       pdf.save(fileBaseName() + ".pdf");
     } catch (err) {
@@ -561,9 +602,9 @@
   async function exportToPng() {
     setBusy("btnPng", true);
     try {
-      const page = prepareExportClone();
-      await new Promise((r) => setTimeout(r, 120));
-      const canvas = await html2canvas(page, { scale: 3, useCORS: true, backgroundColor: "#ffffff" });
+      const pageEl = prepareExportClone();
+      await new Promise((r) => setTimeout(r, 150));
+      const canvas = await html2canvas(pageEl, { scale: 3, useCORS: true, backgroundColor: "#ffffff" });
       const link = document.createElement("a");
       link.download = fileBaseName() + ".png";
       link.href = canvas.toDataURL("image/png");
@@ -577,21 +618,18 @@
   }
 
   function printDocument() {
-    // Print styles hide the dashboard chrome and print only #a4Page at full scale.
-    a4Page.style.setProperty("--doc-font-scale", "1");
+    // Print CSS (@media print) hides the dashboard chrome and prints the
+    // single .a4-page at full, un-zoomed scale.
     window.print();
-    // Restore the auto-fit scale for on-screen viewing after the print dialog closes.
-    setTimeout(fitPageToOnePage, 300);
   }
 
   function setBusy(btnId, busy) {
     const btn = el(btnId);
     if (!btn) return;
     btn.disabled = busy;
-    btn.style.opacity = busy ? ".6" : "";
   }
 
-  /* ================================ 10. THEME ================================ */
+  /* ================================ 12. THEME ================================ */
 
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
@@ -611,37 +649,37 @@
     applyTheme(stored === "dark" ? "dark" : "light");
   }
 
-  /* ===================== 11. SAMPLE DATA / RESET / MODAL ===================== */
+  /* ===================== 13. SAMPLE DATA / RESET / MODAL ===================== */
 
   function loadSampleData() {
     state = {
-      topic: "Lorem Ipsum Dolor Sit Amet",
-      handler: "XXXXX",
+      topic: "Introduction to Version Control with Git",
+      handler: "XXXXXXXXXXXXXXXXXXXXXXXXX",
       date: new Date().toISOString().slice(0, 10),
       time: "10:30",
       duration: "1 hr 30 min",
-      venue: "Seminar Hall, Block B",
+      venue: "SGC ROOM",
       attendees: "64",
       objectives: [
-        "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor",
-        "Incididunt ut labore et dolore magna aliqua ut enim ad minim veniam",
-        "Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo"
+        "Explain the purpose of version control in collaborative software projects",
+        "Demonstrate core Git commands: clone, commit, push, and pull",
+        "Practice resolving a merge conflict in a shared repository"
       ],
-      summary: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
+      summary: "This session introduced final-year students to Git and GitHub as the standard toolchain for collaborative development. Attendees moved from local repository basics to a live, hands-on branching and merge-conflict exercise modelled on real team workflows, closing with a Q&A on best practices for commit hygiene and code review.",
       concepts: [
-        { concept: "Lorem Ipsum", description: "Dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore." },
-        { concept: "Consectetur", description: "Adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." },
-        { concept: "Incididunt", description: "Ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation." },
-        { concept: "Ullamco", description: "Laboris nisi ut aliquip ex ea commodo consequat duis aute irure dolor in reprehenderit." }
+        { concept: "Repository", description: "A tracked project folder containing the full history of changes." },
+        { concept: "Commit", description: "A saved snapshot of changes with a descriptive message." },
+        { concept: "Branching", description: "Working on features in isolation before merging into the main line." },
+        { concept: "Merge Conflict", description: "When overlapping changes require manual reconciliation." }
       ],
       outcomes: [
-        "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor",
-        "Incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud",
-        "Exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat duis aute irure"
+        "92% of attendees successfully pushed their first commit during the session",
+        "Live poll showed a 4.6/5 average confidence rating in using Git independently",
+        "Follow-up practice repository shared for continued self-paced learning"
       ],
       links: [
-        { title: "Lorem Ipsum Reference", url: "https://www.lipsum.com/" },
-        { title: "Dolor Sit Amet Guide", url: "https://www.example.com/" }
+        { title: "Pro Git Book (free online)", url: "https://git-scm.com/book/en/v2" },
+        { title: "GitHub Learning Lab", url: "https://skills.github.com/" }
       ]
     };
     hydrateFormFromState();
@@ -665,7 +703,6 @@
     updateStatus();
   }
 
-  /** Push top-level scalar state fields back into their form inputs (used after sample/reset). */
   function hydrateFormFromState() {
     ["topic", "handler", "date", "time", "duration", "venue", "attendees", "summary"].forEach((id) => {
       const input = el(id);
@@ -678,18 +715,18 @@
 
   function openPreviewModal() {
     const modal = el("previewModal");
-    const modalPage = el("a4PageModal");
-    modalPage.style.setProperty("--doc-font-scale", "1");
-    mountDocument(modalPage, state);
+    const modalList = el("a4PageModal");
+    modalList.style.zoom = 1;
+    mountDocument(modalList, state);
     modal.classList.add("is-open");
     modal.setAttribute("aria-hidden", "false");
-    // Scale the modal page down to fit the viewport height while staying crisp.
+    // Fit the page to the viewport height using zoom (visual only — the
+    // content-level one-page fit already happened inside mountDocument).
     requestAnimationFrame(() => {
       const vh = window.innerHeight - 100;
-      const naturalHeight = modalPage.scrollHeight;
+      const naturalHeight = modalList.scrollHeight;
       const scale = Math.min(1, vh / naturalHeight);
-      modalPage.style.transform = `scale(${scale})`;
-      modalPage.style.marginBottom = `${naturalHeight * (scale - 1)}px`;
+      modalList.style.zoom = scale > 0 ? scale : 1;
     });
   }
 
@@ -699,10 +736,9 @@
     modal.setAttribute("aria-hidden", "true");
   }
 
-  /* ========================== 12. EVENT WIRING / INIT ========================= */
+  /* ========================== 14. EVENT WIRING / INIT ========================= */
 
   function wireStaticFields() {
-    // Simple scalar fields: update state + validate + re-render on every input.
     ["topic", "handler", "duration", "venue", "attendees"].forEach((id) => {
       el(id).addEventListener("input", () => {
         state[id] = el(id).value;
@@ -714,32 +750,12 @@
       });
     });
 
-    // Venue-specific logic: update duration placeholder and time field based on venue
-    el("venue").addEventListener("input", () => {
-      const durEl = el("duration");
-      const timeEl = el("time");
-      const venue = el("venue").value;
-      
-      if (venue === "SGC ROOM") {
-        durEl.placeholder = "e.g. 2 PM - 3:30 PM";
-        timeEl.disabled = false;
-      } else if (venue === "KT SESSION") {
-        durEl.placeholder = "e.g. 1 hr 30 min";
-        timeEl.disabled = false;
-      }
-    });
-
     el("date").addEventListener("input", () => {
       state.date = el("date").value;
       const day = dayFromDate(state.date);
       el("day").value = day;
-      // Default duration behaviour: set a sensible default if user hasn't provided one.
       if (!state.duration || state.duration === "" || state.duration === "1 - 1:30") {
-        if (day === "Friday") {
-          state.duration = "1 - 2:00";
-        } else {
-          state.duration = "1 - 1:30";
-        }
+        state.duration = day === "Friday" ? "1 - 2:00" : "1 - 1:30";
         const durEl = el("duration");
         if (durEl) durEl.value = state.duration;
       }
@@ -812,7 +828,7 @@
 
     window.addEventListener("resize", () => {
       clearTimeout(window.__sgcResizeT);
-      window.__sgcResizeT = setTimeout(fitPageToOnePage, 150);
+      window.__sgcResizeT = setTimeout(updateStageZoom, 150);
     });
   }
 
